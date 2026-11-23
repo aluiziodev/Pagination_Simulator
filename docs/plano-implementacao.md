@@ -17,6 +17,25 @@ A interface obrigatória do enunciado é `./pager --algo <ALGO> --frames <N> --t
 - **Modos de saída.** Tratar `--visual` e `--verbose` como exclusivos. Se ambos forem informados, rejeitar a execução com uma mensagem de uso.
 - **Validação do traço.** Aceitar IDs inteiros não negativos e tipos `R` ou `W`, com leitura como padrão. Aceitar traços sem referências com métricas zeradas e taxa de 0%. Rejeitar arquivos ilegíveis e referências malformadas, como IDs inválidos, tipos desconhecidos ou campos extras. Retornar código de saída diferente de zero e indicar a linha quando o erro estiver em uma referência.
 
+## Estrutura de diretórios
+
+- `src/core/` reúne os contratos compartilhados e receberá o motor e o cálculo das métricas.
+- `src/policies/` reúne a interface das políticas e receberá as implementações dos algoritmos.
+- `src/cli/` receberá os argumentos, a leitura do traço e os modos de saída do terminal.
+- `docs/` reúne o enunciado e o plano de implementação.
+
+O Makefile ficará na raiz e usará `-Isrc` para resolver os caminhos dos cabeçalhos a partir de `src/`.
+
+## Contratos compartilhados (I1)
+
+Os cabeçalhos [contracts.hpp](../src/core/contracts.hpp) e [policies.hpp](../src/policies/policies.hpp) definem os tipos usados pelo leitor, pelo motor, pelas políticas e pela saída.
+
+- `Reference` guarda o ID não negativo da página e o tipo de acesso, com leitura por padrão. `Trace` mantém as referências em ordem de execução.
+- `Frames` usa o índice do vetor como número do frame, a partir de zero. Uma posição vazia contém `std::nullopt`. Em `ResidentPage`, `loaded_at` e `last_access` são índices do traço, começando em zero. Uma carga inicia a frequência em 1, liga R e define M conforme o tipo do acesso. Em um acerto, o motor atualiza o último acesso, incrementa a frequência, liga R e liga M se o acesso for de escrita.
+- O motor chama `select_victim(frames, trace, position)` via `std::visit` quando há falta com todos os frames ocupados. A política retorna o índice da vítima. `position` é o índice da referência atual, então Ótimo consulta o traço a partir de `position + 1`. Clock pode alterar R durante a seleção e mantém um ponteiro por instância. O motor cria uma nova instância da política a cada simulação.
+- Após processar cada referência, o motor chama `Nru::after_access` quando a política escolhida é NRU. O método limpa R ao fim da quarta referência e a cada quatro referências subsequentes, antes de disponibilizar o estado à saída.
+- A saída recebe o `StepResult` e consulta os `Frames` pós-acesso por referência constante antes do próximo passo. O resultado guarda o índice da referência, a referência, o frame acessado e o desfecho (`Hit`, `Load` ou `Replacement`). `eviction` está presente somente em `Replacement` e informa a página removida e se ela foi escrita em disco. O modo visual copia o resultado e os frames para seu histórico. A interface pode somar 1 à posição ao exibi-la.
+
 ## Tasks e dependências
 
 Uma dependência indica o que precisa estar disponível para concluir e verificar a task. Os três desenvolvedores podem preparar suas partes em paralelo enquanto os contratos são definidos.
