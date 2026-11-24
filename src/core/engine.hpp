@@ -2,6 +2,7 @@
 #define PAGER_ENGINE_HPP
 
 #include "core/contracts.hpp"
+#include "core/metrics.hpp"
 #include "policies/policies.hpp"
 
 #include <stdexcept>
@@ -19,6 +20,17 @@ public:
     }
 
     const Frames& frames() const noexcept { return frames_; }
+    const Metrics& metrics() const noexcept { return metrics_; }
+
+    // Ao fim do traço, este é o mapa final de páginas por índice de frame.
+    std::vector<std::optional<PageId>> page_ids() const {
+        std::vector<std::optional<PageId>> pages;
+        pages.reserve(frames_.size());
+        for (const auto& frame : frames_) {
+            pages.push_back(frame ? std::optional<PageId>{frame->page} : std::nullopt);
+        }
+        return pages;
+    }
 
     std::optional<StepResult> step() {
         if (position_ == trace_.size()) {
@@ -70,12 +82,15 @@ private:
         if (auto* nru = std::get_if<Nru>(&policy_)) {
             nru->after_access(frames_, position_);
         }
-        return StepResult{position_++, reference, index, outcome, eviction};
+        const StepResult result{position_++, reference, index, outcome, eviction};
+        metrics_.record(result);
+        return result;
     }
 
     Trace trace_;
     Frames frames_;
     Policy policy_;
+    Metrics metrics_;
     std::size_t position_ = 0;
 };
 
